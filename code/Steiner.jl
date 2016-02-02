@@ -13,7 +13,7 @@ function steinerCPLEX(np::Int64=400,steinertype::Int64=1;
 
     Main.closeall();
     # for nn = 3:10 Steiner.steinerCPLEX(500,3,npt=nn,dim=2,nearestk=50,savedata=true) end
-    # for nn = 3:8 Steiner.steinerCPLEX(500,3,npt=nn,dim=2) end
+    #for nn in [4,8] Steiner.steinerCPLEX(500,3,npt=nn,dim=3,nearestk=50,savedata=true) end
     targetp, npt = define_targets(dim,npt)
 
     # Mesh
@@ -59,7 +59,7 @@ function steinerCPLEX(np::Int64=400,steinertype::Int64=1;
    
     # call CPLEX/Gurobi
     solver = CplexSolver(CPX_PARAM_LPMETHOD=6,CPX_PARAM_SCRIND=1,CPX_PARAM_SIMDISPLAY=1)
-    solver = GurobiSolver(DisplayInterval=10,Crossover=0)
+    #solver = GurobiSolver(DisplayInterval=10,Crossover=0)
     sol = linprog(cc[1,:],vcat(A,Amaxmin),'<',vcat(b,zeros(size(Amaxmin,1)))[:,1],-Inf, Inf, solver)
     objval = sol.objval
     u = sol.sol
@@ -235,10 +235,13 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
     dim = size(p,2); np = size(p,1); npt = size(targetp,1); ve = 1 - max(0,t-s)
     mlab.figure(fignum);mlab.clf();
     vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.))
-    esm = Int64(size(e,1)/2); ep = e[1:esm,:]; ve = min(ve[1:esm],ve[(esm+1):end]);Ie = find(x->x<0.1,ve)
+    esm = Int64(size(e,1)/2); ep = e[1:esm,:];
+    println(esm)
+    ve = min(ve[1:esm],ve[(esm+1):end]); Ie = find(x->x<0.1,ve)
     minmaxmean(ve)
     println(InOrange*string(unique(round(ve*1e3)/1000))*InDefault)
-    vec2 = plot_graph(p,ep[Ie,:],ve[Ie,1],figure=fignum,line_width=5.,vmin=0.,vmax=1.);view2D();setcolormap(vec2,"Oranges")
+    vec2 = plot_graph(p,ep[Ie,:],ve[Ie,1],figure=fignum,line_width=5.*(dim-1.),vmin=0.,vmax=1.);setcolormap(vec2,"Oranges")
+    if dim==2 view2D() end
     plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08,figure=fignum);mlab.colorbar()
 
     # save
@@ -248,6 +251,18 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
         mlab.savefig(filename*".png",size=(2000,2000))
         matwrite(replace(filename,"pictures","runs")*".mat",Dict("t"=>t,"s"=>s,"p"=>p,"e"=>e,"targetp"=>targetp))
     end
+end
+#----------------------------------------------------------
+function reloadsteiner(np::Int64=400,steinertype::Int64=3;
+                       nearestk::Int64=20,dim::Int64=2,npt::Int64=4,savedata::Bool=false)
+    targetp, npt = define_targets(dim,npt)
+    p, e, np, ne = gensteiner_mesh(steinertype,targetp,np,nearestk=nearestk,dim=dim)
+    filename = ENV["HOME"]*"/Julia/Steiner/runs/fig"*"_dim_"*string(dim)*"_np_"*string(np)*"_nps_"*string(npt)
+    println(InMagenta*filename*InDefault)
+    file = matopen(string(filename,".mat"))
+    p = read(file,"p"); t = read(file, "t"); s = read(file,"s"); e = read(file,"e"); targetp = read(file,"targetp")
+    close(file)
+    displaysave_steinertree(t,s,e,p,targetp,1,false)
 end
 
 end # module
