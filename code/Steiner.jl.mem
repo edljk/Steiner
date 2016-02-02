@@ -1,0 +1,89 @@
+        - module Steiner
+        - 
+        - using Base.LinAlg, Gadfly
+        - using GeneralTools, GraphicTools, MeshTools
+        - 
+        - export steinerLP
+        - 
+        0 function steinerLP()
+        - 
+        -     # Target points
+        0     Main.closeall(); q = 4;dim = 2
+        0     tt = linspace(0.,2*pi,q+1)[1:(end-1)]
+      448     targetp = hcat(cos(tt),sin(tt),zeros(q))*.95
+        -     
+        -     # Mesh
+        0     np = 400; p = vcat(2*rand(np,dim)-1,targetp[:,1:dim])
+        0     tri = delaunay(p); np = size(p,1)
+        -     #closeall();plot_t(p,tri);plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08)
+        - 
+        -     # edges
+  5756209     ep = convert(Array{Int64,2},vcat(tri[:,[1,2]],tri[:,[2,3]],tri[:,[1,3]]))
+   223744     ep = uniquerows(sort(ep,2))[1]
+  1962835     em = hcat(ep[:,2],ep[:,1])
+  1834726     e = vcat(ep,em); ne = size(e,1)
+    19216     l = sqrt(sum((p[e[:,1],:]- p[e[:,2],:]).^2, 2))
+        -     
+        -     # divergence matrix
+ 13569735     A = sparse(e[:,1], collect(1:ne),  ones(ne), np, ne) + 
+        -     sparse(e[:,2], collect(1:ne), -ones(ne), np, ne)
+  7191512     L = hcat(speye(ne,ne),-speye(ne,ne)); 
+  1931286     b = zeros(np,q); idx = 0; Ap = A'; Lp = L'
+        -     
+        -     # Dirichlet condition
+        0     targets = (np-size(targetp,1)+1):np
+        0     b[targets,:] = eye(size(targetp,1))
+      192     b[end,:] = -ones(1,q); b[end,end] = 0 # sink
+        - 
+        -     # parameters
+        0     maxiter = 20000; Lip = 5; tau = 0.1/Lip; sigma = 1/tau/Lip^2
+        - 
+        -     # memory allocation
+  1246913     u = zeros(ne, q);s = zeros(ne,1); t = zeros(ne,1)     # primals
+   166288     psi = zeros(ne,q); phi = zeros(ne,q);xi = zeros(np,q) # duals
+   166096     psi_ = copy(psi); phi_ = copy(phi); xi_ = copy(xi)
+     5536     prodAtmp = zeros(size(A,1)); prodAptmp = zeros(size(A,2))
+    40720     prodLtmp_T = zeros(size(L,1));prodLtmp_S = zeros(size(L,1))
+    76640     prodLptmp_T = zeros(size(L,2));prodLptmp_S = zeros(size(L,2))
+ 13632447     uS = copy(vcat(u[:,1],s)); uT = copy(vcat(u[:,1],t))
+        - 
+        0     for iter = 1:maxiter
+        - 
+-973047360         psi_ = copy(psi); phi_ = copy(phi); xi_ = copy(xi)  
+        0         for j = 1:q
+-448012858             psi[:,j] = max(0, psi[:,j] + sigma*(L*vcat(u[:,j],s)))
+-450817639             phi[:,j] = min(0, phi[:,j] + sigma*(L*vcat(u[:,j],t)))
+        0             xi[:,j] = xi[:,j] + sigma*(A*u[:,j] - b[:,j])
+        -         end
+1377931920         psi_ = copy(2*psi - psi_); phi_ = copy(2*phi - phi_); xi_ = copy(2*xi - xi_)
+        0         for j = 1:q
+310116640             tmp_s = L'*psi_[:,j]
+309192704             tmp_t = L'*phi_[:,j]
+        0     
+316872672             u[:,j] = u[:,j] - tau*(tmp_s[1:ne] + tmp_t[1:ne] + A'*xi_[:,j])
+1858227131             s = s - tau*(l + tmp_s[ne+1:end])
+-902408384             t = t - tau*(-l + tmp_t[ne+1:end])
+        -         end
+        - 
+        - 
+        -         # display
+        0         if mod(iter,1000)==0
+   923648             feas = sqrt(sum((A*u-b).^2,2))[1]
+      960             @printf "iter = %04d, feas = %4.6f\n" iter feas 
+  1350642             ve = 1 - max(0,s-t)
+        0             minmaxmean(ve)
+  2626363             Ie = find(x->x>0.1,ve)
+        -             #mlab.clf();vec = plot_graph(p,e[Ie,:],1-ve[Ie,1]);view2D();setcolormap(vec,"Oranges")
+        -         end
+        - 
+        - end
+        - 
+        - end # module
+        - 
+        0 
+        - 
+        - 
+        - 
+        - 
+        - 
+        - 

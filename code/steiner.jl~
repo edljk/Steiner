@@ -1,0 +1,108 @@
+using Base.LinAlg, Gadfly
+
+# Target points
+Main.closeall(); q = 4;dim = 2
+tt = linspace(0.,2*pi,q+1)[1:(end-1)]
+targetp = hcat(cos(tt),sin(tt),zeros(q))*.95
+
+# Mesh
+np = 400; p = vcat(2*rand(np,dim)-1,targetp[:,1:dim])
+tri = delaunay(p); np = size(p,1)
+#closeall();plot_t(p,tri);plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08)
+
+# edges
+ep = convert(Array{Int64,2},vcat(tri[:,[1,2]],tri[:,[2,3]],tri[:,[1,3]]))
+ep = uniquerows(sort(ep,2))[1]
+em = hcat(ep[:,2],ep[:,1])
+e = vcat(ep,em); ne = size(e,1)
+l = sqrt(sum((p[e[:,1],:]- p[e[:,2],:]).^2, 2))
+l = l + rand(size(l))*0.01
+
+# divergence matrix
+A = sparse(e[:,1], collect(1:ne),  ones(ne), np, ne) + 
+    sparse(e[:,2], collect(1:ne), -ones(ne), np, ne)
+L = hcat(speye(ne,ne),-speye(ne,ne)); 
+b = zeros(np,q); idx = 0; Ap = A'; Lp = L'
+
+# Dirichlet condition
+targets = (np-size(targetp,1)+1):np
+b[targets,:] = eye(size(targetp,1))
+b[end,:] = -ones(1,q); b[end,end] = 0 # sink
+
+# parameters
+maxiter = 1000
+Lip = 5; tau = 0.1/Lip; sigma = 1/tau/Lip^2
+
+# memory allocation
+u = zeros(ne, q);s = zeros(ne,1); t = zeros(ne,1)     # primals
+psi = zeros(ne,q); phi = zeros(ne,q);xi = zeros(np,q) # duals
+psi_ = copy(psi); phi_ = copy(phi); xi_ = copy(xi)
+prodAtmp = zeros(size(A,1)); prodAptmp = zeros(size(A,2))
+prodLtmp_T = zeros(size(L,1));prodLtmp_S = zeros(size(L,1))
+prodLptmp_T = zeros(size(L,2));prodLptmp_S = zeros(size(L,2))
+uS = vcat(u[:,1],s); uT = vcat(u[:,1],t)
+
+for iter = 1:maxiter  
+    copy!(psi_,psi)
+    copy!(phi_,phi)
+    copy!(xi_,xi)
+    for j = 1:q
+        copy!(uS,1,u[:,j],size(u,1)); copy!(uS,size(u,1)+1,s,1)
+        copy!(uT,1,u[:,j],size(u,1)); copy!(uT,size(u,1)+1,t,1)
+        A_mul_B!(prodLtmp_S,L,uS)
+        A_mul_B!(prodLtmp_T,L,uT)
+        for k = 1:size(psi,1)            
+            psi[k,j] = max(0, psi[k,j] + sigma*prodLtmp_S[k])
+            phi[k,j] = max(0, phi[k,j] + sigma*prodLtmp_T[k])
+        end
+        A_mul_B!(prodAtmp,A,u[:,j])
+        for k = 1:size(xi,1)
+            xi[k,j] += sigma*(prodAtmp[k] - b[k,j])
+        end
+    end
+    for k = 1:length(psi)
+        psi_[k] = 2*psi[k] - psi_[k]
+        phi_[k] = 2*phi[k] - phi_[k]
+    end
+    for k = 1:length(xi)
+        xi_[k] = 2*xi[k] - xi_[k]
+    end
+    for j = 1:q
+        A_mul_B!(prodLptmp_S,Lp,psi_[:,j])
+        A_mul_B!(prodLptmp_T,Lp,phi_[:,j])
+        A_mul_B!(prodAptmp,Ap,xi_[:,j])
+        for k = 1:size(u,1)
+            u[k,j] = u[k,j] - tau*(prodLptmp_S[k] + prodLptmp_T[k] + prodAptmp[k])
+        end
+        for k = 1:length(s)
+            s[k] = s[k] - tau*(l[k] + prodLptmp_S[ne+k])
+            t[k] = t[k] - tau*(-l[k] + prodLptmp_T[ne+k])
+        end
+    end
+   
+    # display
+    if mod(iter,100)==0
+        feas = sqrt(sum((A*u-b).^2,2))[1]
+        @printf "iter = %04d, feas = %4.6f\n" iter feas 
+   
+        #pp =  Array{Gadfly.Layer,1}[]
+        ve = 1 - max(0,s-t)
+        #mlab.clf();vec = plot_graph(p,e,ve[:,1]);view2D();setcolormap(vec,"Oranges")
+        minmaxmean(ve)
+        #for i = 1:ne      
+        #    ve = 1 - max(0,s[i]-t[i])       
+        #    if v > 0.1
+        #        push!(pp,layer(x=p[e[i,:],1],y=p[e[i,:],2],Geom.line,Theme(default_color=Colors.RGB(1.,v,1.))))
+        #    end        
+        #end
+        #display(plot(pp...))
+    end
+end
+
+
+
+
+
+
+
+
