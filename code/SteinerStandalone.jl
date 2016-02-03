@@ -10,7 +10,6 @@ include(string(ENV["HOME"],"/Julia/Steiner/code/Steinersetup.jl"))
 function steinerCPLEX(np::Int64=400,steinertype::Int64=3;
                       nearestk::Int64=20,dim::Int64=2,npt::Int64=4,savedata::Bool=true)
 
- 
     # for nn = 3:10 SteinerStandalone.steinerCPLEX(500,3,npt=nn,dim=2,nearestk=50,savedata=true) end
     # for nn in [4,6,8,12,20] SteinerStandalone.steinerCPLEX(2000,3,npt=nn,dim=3,nearestk=50,savedata=true) end
     targetp, npt = define_targets(dim,npt)
@@ -53,11 +52,10 @@ function steinerCPLEX(np::Int64=400,steinertype::Int64=3;
 
     # vcost
     cc = hcat(zeros(1,npt*ne),l[:,1]',-l[:,1]')
-
    
     # call CPLEX/Gurobi
     solver = CplexSolver(CPX_PARAM_LPMETHOD=6,CPX_PARAM_SCRIND=1,CPX_PARAM_SIMDISPLAY=1)
-    #solver = GurobiSolver(DisplayInterval=10,Crossover=0)
+    solver = GurobiSolver(DisplayInterval=10,Method=3,Crossover=-1)
     sol = linprog(cc[1,:],vcat(A,Amaxmin),'<',vcat(b,zeros(size(Amaxmin,1)))[:,1],-Inf, Inf, solver)
     objval = sol.objval
     u = sol.sol
@@ -68,7 +66,7 @@ function steinerCPLEX(np::Int64=400,steinertype::Int64=3;
     println("objv            = "*InOrange*"$(objval)"*InDefault)
     t = u[(ne*npt+1):(ne*(npt+1))]
     s = u[(ne*(npt+1)+1):end]
-    save_steinertree(t,s,e,p,targetp,1,savedata)
+    save_steinertree(t,s,e,p,targetp,1,savedata,steinertype,nearestk)
    
     
     # display sizes
@@ -84,17 +82,17 @@ end
 
 #----------------------------------------------------------
 function save_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Array{Int64,2},
-                          p::Array{Float64,2},targetp::Array{Float64,2},fignum::Int64,savedata::Bool)
+                          p::Array{Float64,2},targetp::Array{Float64,2},fignum::Int64,savedata::Bool,
+                          steinertype::Int64,nearestk::Int64)
     dim = size(p,2); np = size(p,1); npt = size(targetp,1); ve = 1 - max(0,t-s)
     #vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.))
-    esm = Int64(size(e,1)/2); ep = e[1:esm,:];
-    println(esm)
+    esm = Int64(size(e,1)/2); ep = e[1:esm,:]
     ve = min(ve[1:esm],ve[(esm+1):end]); Ie = find(x->x<0.1,ve)
     minmaxmean(ve)
-    println(InOrange*string(unique(round(ve*1e3)/1000))*InDefault)
+    println(InOrange*string(sort(unique(round(ve*1e3)/1000),rev=true))*InDefault)
     # save
     if savedata
-        filename = ENV["HOME"]*"/Julia/Steiner/pictures/fig"*"_dim_"*string(dim)*"_np_"*string(np)*"_nps_"*string(npt)
+        filename = steinerfilename(dim,np,npt,steinertype,nearestk)
         println(InMagenta*filename*InDefault)        
         matwrite(replace(filename,"pictures","runs")*".mat",Dict("t"=>t,"s"=>s,"p"=>p,"e"=>e,"targetp"=>targetp))
     end

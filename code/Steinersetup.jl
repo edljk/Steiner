@@ -18,7 +18,7 @@ function gensteiner_mesh(steinertype::Int64=1,targetp::Array{Float64,2}=zeros(1,
             ep[((k-1)*nearestk+1):k*nearestk,2] = idxst
             #println(idxst,"\n",distst)
         end
-    elseif steinertype==3 # 3 <-> Nearest neighbor on a grid of [-1,1]
+    elseif steinertype==3 || steinertype==4 # 3, 4 <-> Nearest neighbor on a grid of [-1,1]
         npg = Int64(max(ceil(np^(1./dim)),5)); xx = linspace(-1,1,npg)
         if dim==2
             X, Y = Main.ndgrid(xx,xx)
@@ -26,7 +26,9 @@ function gensteiner_mesh(steinertype::Int64=1,targetp::Array{Float64,2}=zeros(1,
         else
             X, Y, Z = Main.ndgrid(xx,xx,xx)
         end
-        pts = hcat(X[:],Y[:],Z[:]); pts = pts + (2.*rand(size(pts))-1.)/10000.
+        pts = hcat(X[:],Y[:],Z[:]);
+        if steinertype==3 pts = pts + (2.*rand(size(pts))-1.)/10000. end
+        if steinertype==4 pts = pts + (2.*rand(size(pts))-1.)/100. end
         p = vcat(pts[:,1:dim],targetp[:,1:dim])
         tree = KDTree(p[:,1:dim]',Euclidean();leafsize=2)
         println(tree)
@@ -72,4 +74,10 @@ function define_targets(dim::Int64=2,npt::Int64=4)
     targetp = targetp - repmat(mean(targetp,1),size(targetp,1),1)
     targetp = 0.9*targetp/maximum(abs(targetp))
     return targetp, size(targetp,1)
+end
+
+#----------------------------------------------------------
+function  steinerfilename(dim::Int64,np::Int64,npt::Int64,steinertype::Int64,nearestk::Int64)
+    filename = ENV["HOME"]*"/Julia/Steiner/pictures/fig_type_"*string(steinertype)*"_dim_"*string(dim)*"_np_"*string(np)*"_nps_"*string(npt)*"_nearestk_"*string(nearestk)
+    return filename
 end

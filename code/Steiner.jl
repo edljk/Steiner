@@ -71,7 +71,7 @@ function steinerCPLEX(np::Int64=400,steinertype::Int64=1;
     println("objv            = "*InOrange*"$(objval)"*InDefault)
     t = u[(ne*npt+1):(ne*(npt+1))]
     s = u[(ne*(npt+1)+1):end]
-    displaysave_steinertree(t,s,e,p,targetp,1,savedata)
+    displaysave_steinertree(t,s,e,p,targetp,1,savedata,steinertype,nearestk)
    
     
     # display sizes
@@ -161,7 +161,8 @@ end
 
 #----------------------------------------------------------
 function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Array{Int64,2},
-                                 p::Array{Float64,2},targetp::Array{Float64,2},fignum::Int64,savedata::Bool)
+                                 p::Array{Float64,2},targetp::Array{Float64,2},fignum::Int64,savedata::Bool,
+                                 steinertype::Int64,nearestk::Int64)
     dim = size(p,2); np = size(p,1); npt = size(targetp,1); ve = 1 - max(0,t-s)
     mlab.figure(fignum);mlab.clf();
     opacity1 = 0.8
@@ -169,14 +170,16 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
         opacity1 = 0.01; opacity2 = 1.; scalev = 0.12
         #vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.),opacity=opacity1)
     else
-        opacity1 = 0.03; opacity2 = 1.; scalev = 0.08
+        opacity1 = 0.05; opacity2 = 1.; scalev = 0.08
         vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.),opacity=opacity1)        
     end
-
-    esm = Int64(size(e,1)/2); ep = e[1:esm,:]
-    ve = min(ve[1:esm],ve[(esm+1):end]); Ie = find(x->x<0.6,ve)
     minmaxmean(ve)
-    println(InOrange*string(unique(round(ve*1e3)/1000))*InDefault)
+    esm = Int64(size(e,1)/2); ep = e[1:esm,:]
+    #ve = ve[1:esm]+ve[(esm+1):end]-1
+    #minmaxmean(ve)
+    ve = min(ve[1:esm],ve[(esm+1):end])
+    Ie = find(x->x<0.6,ve)
+    println(InOrange*string(sort(unique(round(ve*1e3)/1000),rev=true))*InDefault)
     vec2 = plot_graph(p,ep[Ie,:],ve[Ie,1],figure=fignum,line_width=(5+10*(dim-2.)),vmin=0.,vmax=1.,opacity=opacity2);setcolormap(vec2,"Oranges")
     if dim==2 view2D() end
     if dim==3 plot_points(p[unique(ep[Ie,:][:]),:],(0.9,0.9,0.9),scales=0.04,figure=fignum) end
@@ -191,27 +194,28 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
     ff["scene"]["render_window"]["aa_frames"] = 8
     # save
     if savedata
-        filename = ENV["HOME"]*"/Julia/Steiner/pictures/fig"*"_dim_"*string(dim)*"_np_"*string(np)*"_nps_"*string(npt)
+        filename = steinerfilename(dim,np,npt,steinertype,nearestk)
         println(InMagenta*filename*InDefault)
         if dim==2 mlab.savefig(filename*".png",size=(2000,2000)) end
         if dim==3
-            savefigs("/tmp/im_",80,figure=1,size=(500,500),sleeptime=0.,
-                     genmovie=true,filemovie=filename,delaymovie=10.)
+            #savefigs("/tmp/im_",80,figure=1,size=(500,500),sleeptime=0.,
+            #         genmovie=true,filemovie=filename,delaymovie=10.)
         end
         matwrite(replace(filename,"pictures","runs")*".mat",Dict("t"=>t,"s"=>s,"p"=>p,"e"=>e,"targetp"=>targetp))
     end
 end
 #----------------------------------------------------------
 function reloadsteiner(np::Int64=400,steinertype::Int64=3;
-                       nearestk::Int64=20,dim::Int64=2,npt::Int64=4,savedata::Bool=false)
+                       nearestk::Int64=20,dim::Int64=2,npt::Int64=4,
+                       savedata::Bool=false)
     targetp, npt = define_targets(dim,npt)
     p, e, np, ne = gensteiner_mesh(steinertype,targetp,np,nearestk=nearestk,dim=dim)
-    filename = ENV["HOME"]*"/Julia/Steiner/runs/fig"*"_dim_"*string(dim)*"_np_"*string(np)*"_nps_"*string(npt)
+    filename = steinerfilename(dim,np,npt,steinertype,nearestk)
     println(InMagenta*filename*InDefault)
-    file = matopen(string(filename,".mat"))
+    file = matopen(string(replace(filename,"pictures","runs"),".mat"))
     p = read(file,"p"); t = read(file, "t"); s = read(file,"s"); e = read(file,"e"); targetp = read(file,"targetp")
     close(file)
-    displaysave_steinertree(t,s,e,p,targetp,1,true)
+    displaysave_steinertree(t,s,e,p,targetp,1,true,steinertype,nearestk)
 end
 
 end # module
