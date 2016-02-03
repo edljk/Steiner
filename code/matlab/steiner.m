@@ -1,119 +1,145 @@
 close all;
 clear;
 
-%addpath('../common/');
+rng(42);
+addpath('../common/');
 
-% Target points
-q=4;
-tt = linspace(0,2*pi, q+1);
-targetp = [cos(tt(1:end-1))',sin(tt(1:end-1))']*.95;
-%targetp(end,:) = [0 0];
+mex CXXFLAGS="\$CXXFLAGS -fopenmp" LDFLAGS="\$LDFLAGS -fopenmp" shrink_osc_mex.cpp
+mex CXXFLAGS="\$CXXFLAGS -fopenmp" LDFLAGS="\$LDFLAGS -fopenmp" shrink_osc2_mex.cpp
 
-% Mesh
-np = 20;
-x = linspace(-1,1,np);
-y = linspace(-1,1,np);
-[X,Y] = meshgrid(x,y);
+maxiter = 100000;
+check = 1000;
 
-X = -1 + 2*rand(size(X));
-Y = -1 + 2*rand(size(Y));
-
-X = [X(:);targetp(:,1)]; 
-Y = [Y(:);targetp(:,2)];
-dt = delaunayTriangulation(X(:),Y(:));
-
-p = dt.Points;
-np = size(p,1);
-
-ep = dt.edges;
-em = [ep(:,2), ep(:,1)];
-e = [ep; em];
-ne = size(e,1);
-
-l = sqrt(sum((p(e(:,1),:)- p(e(:,2),:)).^2, 2));
-%l = l + rand(size(l))*0.01;
-
-A = sparse(e(:,1), 1:ne, ones(ne,1), np, ne) + ...
-    sparse(e(:,2), 1:ne, -ones(ne,1), np, ne);
-
-L = [speye(ne,ne), -speye(ne,ne)];
-
-b = zeros(np, q);
-idx = 0;
-
-targets = np-length(targetp)+1:np;
-b(targets,:) = eye(length(targetp));
-b(end,:) = -ones(1,q); % sink
-b(end,end) = 0;
-
-% primals
-u = zeros(ne, q);
-s = zeros(ne,1);
-t = zeros(ne,1);
-
-% duals
-psi = zeros(ne,q);
-phi = zeros(ne,q);
-xi = zeros(np,q);
-
-maxiter = 5000;
-Lip = 5;
-tau = 0.1/Lip;
-sigma = 1/tau/Lip^2;
-
-for iter=1:maxiter
-  
-  psi_ = psi;
-  phi_ = phi;
-  xi_ = xi;
-  
-  for j=1:q
-    psi(:,j) = max(0, psi(:,j) + sigma*(L*[u(:,j);s]));
-    phi(:,j) = min(0, phi(:,j) + sigma*(L*[u(:,j);t]));
-    xi(:,j) = xi(:,j) + sigma*(A*u(:,j) - b(:,j));
-  end
-  
-  psi_ = 2*psi - psi_;
-  phi_ = 2*phi - phi_;
-  xi_ = 2*xi - xi_;
-  
-  for j=1:q
-    
-    tmp_s = L'*psi_(:,j);
-    tmp_t = L'*phi_(:,j);
-    
-    u(:,j) = u(:,j) - tau*(tmp_s(1:ne) + tmp_t(1:ne) + A'*xi_(:,j));
-    s = s - tau*(l + tmp_s(ne+1:end));
-    t = t - tau*(-l + tmp_t(ne+1:end));
-  end
-  
-  if mod(iter, 1000) == 0
-    feas = norm(A*u-b, 'fro');
-    fprintf('iter = %04d, feas = %f\n', iter, feas);
-    
-    %sfigure(1);
-    hold on;
-    
-    v = 1-max(0, s-t);
-    minmaxmean(v)
-    for i=1:ne      
-      v = 1-max(0, s(i)-t(i));
-      if v > 0.1
-        plot(p(e(i,:),1), p(e(i,:),2), 'Color',ones(1,3)*v);
-      end
-    end
-    
-    for i=1:q
-      plot(p(targets(i), 1), p(targets(i),2), 'o', 'Markersize', 5, 'Linewidth', 2);
-    end
-    hold off;
-    axis equal
-    drawnow;
-  end
+%% 3 points
+if 0
+  q=3;
+  targetp = [0,1; -sin(2*pi/3),-1/2; sin(2*pi/3),-1/2];
 end
 
+%% 4 points
+if 0
+  targetp = [-1, -1; 1, -1; -1, 1; 1, 1];
+  q=4
+end
 
+%% 5 points
+if 1
+  q=5;
+  tt = linspace(0,2*pi, q+1);
+  targetp = [cos(tt(1:end-1))',sin(tt(1:end-1))'];
+end
 
+%% 6 points and one in the middle
+if 0
+  q=6;
+  tt = linspace(0,2*pi, q+1);
+  targetp = [cos(tt(1:end-1))',sin(tt(1:end-1))'];
+  q = q+1;
+  targetp = [targetp; 0,0];
+end
 
+%% 2 rows with 3 points
+if 0
+  targetp = [-1,-0.5; 0,-0.5; 1, -0.5;
+             -1, 0.5; 0, 0.5; 1,  0.5];
+  q=6;
+end
 
+%% Compute mesh: regular grid + noise
+n = 10;
+[X,Y] = meshgrid(linspace(-1,1,n), linspace(-1,1,n));
 
+% add noise to enforce uniqueness
+X = X + randn(n,n)/(5*n);
+Y = Y + randn(n,n)/(5*n);
+
+%% Add target points
+p = [[X(:);targetp(:,1)], [Y(:);targetp(:,2)]];
+np = size(p,1);
+
+%% compute edges
+nn = n^2;
+idx = knnsearch(p,p,'K',nn+1);
+e = reshape(cat(3,repmat(1:length(p),nn,1)',idx(:,2:end)),[],2);
+ne = size(e,1);
+l = sqrt(sum((p(e(:,1),:)- p(e(:,2),:)).^2, 2));
+
+%% Flow constraint
+A = sparse(e(:,1), 1:ne, ones(ne,1), np, ne) + ...
+    sparse(e(:,2), 1:ne, -ones(ne,1), np, ne);
+ 
+%% Source / sink points
+b = zeros(np, q);
+targets = np-length(targetp)+1:np;
+b(targets,:) = eye(length(targetp));
+b(end,:) = -ones(1,q); 
+b(end,end) = 0;
+
+%% Varables
+u = zeros(ne, q);
+xi = zeros(np,q);
+
+%% Preconditioning
+fact = 0.1;
+tau = fact/2;
+sigma = 1./sum(A.^2, 2)/fact;
+rho = 1.9;
+dykstra_iter = 1;
+for iter=1:maxiter
+  
+  xi_old = xi;
+  u_old  = u;
+  
+  % dual update
+  for j=1:q
+    xi(:,j) = xi(:,j) + sigma.*(A*u(:,j) - b(:,j));
+  end
+    
+  xi_ = 2*xi - xi_old;
+  
+  % primal update
+  for j=1:q
+    u(:,j) = u(:,j) - tau.*(A'*xi_(:,j));
+  end
+  %[u1, dykstra_iter] = shrink_osc_mex(u, tau.*l);  
+  [u] = shrink_osc2_mex(u, tau.*l);  
+  
+  % overrelaxation
+  xi = (1-rho)*xi_old + rho*xi;
+  u = (1-rho)*u_old + rho*u;
+
+  if mod(iter, check) == 0
+    div = max(max(abs(A*u-b)));
+       
+    v = max(u,[],2) - min(u,[],2);
+    f = v'*l;
+    
+    fprintf('iter = %04d, length = %f, ||div||_infty = %f, dykstra_iter = %f\n', ...
+    iter, f, div, dykstra_iter);
+    
+    sfigure(1); hold on;
+    tree = find(v > 0.01);
+    for i=1:length(tree)
+      c = 1-max(0, min(1, v(tree(i))));
+      plot(p(e(tree(i),:),1), p(e(tree(i),:),2), 'Color',...
+        ones(1,3)*c, 'Linewidth', 1);
+    end
+    plot(X,Y, '.b', 'Markersize', 1);
+    for i=1:q
+      plot(p(targets(i), 1), p(targets(i),2), 'ro', 'Markersize', 5, 'Linewidth', 2);
+    end    
+    
+    hold off;
+    
+    xlim([-1, 1]);
+    ylim([-1, 1]);
+    axis equal;
+    drawnow;
+        
+    filename = sprintf('out/%08d.png', iter/check);
+    set(gcf, 'PaperPosition', [0 0 7 7]);
+    set(gcf, 'PaperSize', [7 7]);
+    saveas(gcf, filename, 'png');
+    
+  end
+end
