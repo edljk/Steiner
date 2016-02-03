@@ -169,7 +169,7 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
         opacity1 = 0.01; opacity2 = 1.; scalev = 0.12
         #vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.),opacity=opacity1)
     else
-        opacity1 = 0.08; opacity2 = 1.; scalev = 0.08
+        opacity1 = 0.03; opacity2 = 1.; scalev = 0.08
         vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.),opacity=opacity1)        
     end
 
@@ -179,19 +179,23 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
     println(InOrange*string(unique(round(ve*1e3)/1000))*InDefault)
     vec2 = plot_graph(p,ep[Ie,:],ve[Ie,1],figure=fignum,line_width=(5+10*(dim-2.)),vmin=0.,vmax=1.,opacity=opacity2);setcolormap(vec2,"Oranges")
     if dim==2 view2D() end
+    if dim==3 plot_points(p[unique(ep[Ie,:][:]),:],(0.9,0.9,0.9),scales=0.04,figure=fignum) end
     plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=scalev,figure=fignum);mlab.colorbar()
+
+    plot_points([0. 0. 0.],(0.1,0.9,0.),scales=0.05,figure=fignum)
     #vec2["actor"]["property"]["interpolation"] = "phong"
     #vec2["actor"]["property"]["specular"] = 0.9
     #vec2["actor"]["property"]["specular_power"] = 50
 
+    ff = mlab.gcf()
+    ff["scene"]["render_window"]["aa_frames"] = 8
     # save
     if savedata
         filename = ENV["HOME"]*"/Julia/Steiner/pictures/fig"*"_dim_"*string(dim)*"_np_"*string(np)*"_nps_"*string(npt)
         println(InMagenta*filename*InDefault)
         if dim==2 mlab.savefig(filename*".png",size=(2000,2000)) end
         if dim==3
-            anim(3.,figure=1)
-            savefigs("/tmp/im_",100,figure=1,size=(500,500),sleeptime=0.,
+            savefigs("/tmp/im_",80,figure=1,size=(500,500),sleeptime=0.,
                      genmovie=true,filemovie=filename,delaymovie=10.)
         end
         matwrite(replace(filename,"pictures","runs")*".mat",Dict("t"=>t,"s"=>s,"p"=>p,"e"=>e,"targetp"=>targetp))
