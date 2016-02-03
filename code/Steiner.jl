@@ -180,8 +180,8 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
     vec2 = plot_graph(p,ep[Ie,:],ve[Ie,1],figure=fignum,line_width=(5+10*(dim-2.)),vmin=0.,vmax=1.,opacity=opacity2);setcolormap(vec2,"Oranges")
     if dim==2 view2D() end
     if dim==3 plot_points(p[unique(ep[Ie,:][:]),:],(0.9,0.9,0.9),scales=0.04,figure=fignum) end
-    plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=scalev,figure=fignum);mlab.colorbar()
-
+    plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=scalev,figure=fignum);cc = mlab.colorbar()
+    cc["scalar_bar_representation"]["position"] = [0.1, 0.9]
     plot_points([0. 0. 0.],(0.1,0.9,0.),scales=0.05,figure=fignum)
     #vec2["actor"]["property"]["interpolation"] = "phong"
     #vec2["actor"]["property"]["specular"] = 0.9
