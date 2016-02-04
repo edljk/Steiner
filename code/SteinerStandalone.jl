@@ -55,7 +55,7 @@ function steinerCPLEX(np::Int64=400,steinertype::Int64=3;
    
     # call CPLEX/Gurobi
     solver = CplexSolver(CPX_PARAM_LPMETHOD=6,CPX_PARAM_SCRIND=1,CPX_PARAM_SIMDISPLAY=1)
-    solver = GurobiSolver(DisplayInterval=10,Method=3,Crossover=-1)
+    #solver = GurobiSolver(DisplayInterval=10,Method=3,Crossover=-1)
     sol = linprog(cc[1,:],vcat(A,Amaxmin),'<',vcat(b,zeros(size(Amaxmin,1)))[:,1],-Inf, Inf, solver)
     objval = sol.objval
     u = sol.sol

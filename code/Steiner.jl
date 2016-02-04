@@ -23,7 +23,7 @@ function steinerCPLEX(np::Int64=400,steinertype::Int64=1;
     # 3 <-> Nearest neighbor on a grid of [-1,1]
     p, e, np, ne = gensteiner_mesh(steinertype,targetp,np,nearestk=nearestk,dim=dim)
     l = sqrt(sum((p[e[:,1],:]- p[e[:,2],:]).^2, 2))
-    #plot_graph(p,e,ones(size(e,1)),figure=1);plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08,figure=1);view2D()
+    #plot_graph(p,e,e_scalars=ones(size(e,1)),figure=1);plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08,figure=1);view2D()
 
     A = []; Amaxmin = []
     for k = 1:npt
@@ -100,7 +100,7 @@ function steinerLP(maxiter::Int64=10000,np::Int64=400)
                     # 3 <-> Nearest neighbor on a grid of [-1,1]
     p, e, np, ne = gensteiner_mesh(steinertype,targetp,np,nearestk=8)
     l = sqrt(sum((p[e[:,1],:]- p[e[:,2],:]).^2, 2))
-    #plot_graph(p,e,ones(size(e,1)),figure=1);plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08,figure=1);view2D()
+    #plot_graph(p,e,e_scalars=ones(size(e,1)),figure=1);plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08,figure=1);view2D()
     
     # divergence matrix
     A = sparse(e[:,1], collect(1:ne),  ones(ne), np, ne) + 
@@ -152,7 +152,7 @@ function steinerLP(maxiter::Int64=10000,np::Int64=400)
             ve = 1 - max(0,s-t)
             minmaxmean(ve)
             Ie = find(x->x>0.1,ve)
-            mlab.figure(2);mlab.clf();vec = plot_graph(p,e[Ie,:],1-ve[Ie,1],figure=2);view2D();setcolormap(vec,"Oranges")
+            mlab.figure(2);mlab.clf();vec = plot_graph(p,e[Ie,:],e_scalars=1-ve[Ie,1],figure=2);view2D();setcolormap(vec,"Oranges")
             plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=0.08,figure=2)
         end
     end
@@ -168,10 +168,10 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
     opacity1 = 0.8
     if dim==3
         opacity1 = 0.01; opacity2 = 1.; scalev = 0.12
-        #vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.),opacity=opacity1)
+        #vec1 = plot_graph(p,e,e_scalars=ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.),opacity=opacity1)
     else
         opacity1 = 0.05; opacity2 = 1.; scalev = 0.08
-        vec1 = plot_graph(p,e,ve,figure=fignum,line_width=1.2,color=(0.9,0.3,0.),opacity=opacity1)        
+        vec1 = plot_graphglyph(p,e,ve,figure=fignum,line_width=0.8,color=(0.9,0.3,0.),opacity=opacity1)        
     end
     minmaxmean(ve)
     esm = Int64(size(e,1)/2); ep = e[1:esm,:]
@@ -180,11 +180,17 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
     ve = min(ve[1:esm],ve[(esm+1):end])
     Ie = find(x->x<0.6,ve)
     println(InOrange*string(sort(unique(round(ve*1e3)/1000),rev=true))*InDefault)
-    vec2 = plot_graph(p,ep[Ie,:],ve[Ie,1],figure=fignum,line_width=(5+10*(dim-2.)),vmin=0.,vmax=1.,opacity=opacity2);setcolormap(vec2,"Oranges")
+    if dim==3
+        vec2 = plot_graph(p,ep[Ie,:],e_scalars=ve[Ie,1],figure=fignum,tube_radius=0.03,vmin=0.,vmax=1.,opacity=opacity2)
+    else
+        vec2 = plot_graphglyph(p,ep[Ie,:],ve[Ie,1],line_width=2.8,figure=fignum,vmin=0.,vmax=1.,opacity=opacity2)
+    end
+    setcolormap(vec2,"Oranges")
+    println(vec2)
+    cc = mlab.colorbar(vec2);cc["scalar_bar_representation"]["position"] = [0.1, 0.9]
     if dim==2 view2D() end
-    if dim==3 plot_points(p[unique(ep[Ie,:][:]),:],(0.9,0.9,0.9),scales=0.04,figure=fignum) end
-    plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=scalev,figure=fignum);cc = mlab.colorbar()
-    cc["scalar_bar_representation"]["position"] = [0.1, 0.9]
+    if dim==3 plot_points(p[unique(ep[Ie,:][:]),:],(0.9,0.9,0.9),scales=0.08,figure=fignum) end
+    plot_points(targetp[:,1:dim],(0.5,0.,0.),scales=scalev,figure=fignum);
     plot_points([0. 0. 0.],(0.1,0.9,0.),scales=0.05,figure=fignum)
     #vec2["actor"]["property"]["interpolation"] = "phong"
     #vec2["actor"]["property"]["specular"] = 0.9
@@ -194,12 +200,13 @@ function displaysave_steinertree(t::Array{Float64,1},s::Array{Float64,1},e::Arra
     ff["scene"]["render_window"]["aa_frames"] = 8
     # save
     if savedata
+        if dim==3 lightvtk() end
         filename = steinerfilename(dim,np,npt,steinertype,nearestk)
         println(InMagenta*filename*InDefault)
         if dim==2 mlab.savefig(filename*".png",size=(2000,2000)) end
         if dim==3
-            #savefigs("/tmp/im_",80,figure=1,size=(500,500),sleeptime=0.,
-            #         genmovie=true,filemovie=filename,delaymovie=10.)
+            savefigs("/tmp/im_",80,figure=1,size=(500,500),sleeptime=0.,
+                     genmovie=true,filemovie=filename,delaymovie=10.)
         end
         matwrite(replace(filename,"pictures","runs")*".mat",Dict("t"=>t,"s"=>s,"p"=>p,"e"=>e,"targetp"=>targetp))
     end
