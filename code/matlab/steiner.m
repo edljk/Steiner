@@ -19,11 +19,11 @@ end
 %% 4 points
 if 0
   targetp = [-1, -1; 1, -1; -1, 1; 1, 1];
-  q=4
+  q=4;
 end
 
 %% 5 points
-if 1
+if 0
   q=5;
   tt = linspace(0,2*pi, q+1);
   targetp = [cos(tt(1:end-1))',sin(tt(1:end-1))'];
@@ -45,22 +45,32 @@ if 0
   q=6;
 end
 
+
+%% 2 rows with 5 points
+if 1
+  targetp = [-1,-0.25; -0.5,-0.25; 0,-0.25; 0.5,-0.25; 1,-0.25;
+             -1, 0.25; -0.5, 0.25; 0, 0.25; 0.5, 0.25; 1, 0.25];
+  q=10;
+end
+
 %% Compute mesh: regular grid + noise
-n = 10;
+n = 20;
 [X,Y] = meshgrid(linspace(-1,1,n), linspace(-1,1,n));
 
 % add noise to enforce uniqueness
-X = X + randn(n,n)/(5*n);
-Y = Y + randn(n,n)/(5*n);
+X = X + randn(n,n)/(4*n);
+Y = Y + randn(n,n)/(4*n);
 
 %% Add target points
 p = [[X(:);targetp(:,1)], [Y(:);targetp(:,2)]];
 np = size(p,1);
 
 %% compute edges
-nn = n^2;
+nn = 100;
 idx = knnsearch(p,p,'K',nn+1);
 e = reshape(cat(3,repmat(1:length(p),nn,1)',idx(:,2:end)),[],2);
+e(e(:,1)>e(:,2),:) = []; % only one edge!
+
 ne = size(e,1);
 l = sqrt(sum((p(e(:,1),:)- p(e(:,2),:)).^2, 2));
 
@@ -80,9 +90,9 @@ u = zeros(ne, q);
 xi = zeros(np,q);
 
 %% Preconditioning
-fact = 0.1;
-tau = fact/2;
-sigma = 1./sum(A.^2, 2)/fact;
+fact = 1;
+tau = fact./sum(abs(A), 1)';
+sigma = 1./sum(abs(A), 2)/fact;
 rho = 1.9;
 dykstra_iter = 1;
 for iter=1:maxiter
@@ -101,34 +111,39 @@ for iter=1:maxiter
   for j=1:q
     u(:,j) = u(:,j) - tau.*(A'*xi_(:,j));
   end
-  %[u1, dykstra_iter] = shrink_osc_mex(u, tau.*l);  
-  [u] = shrink_osc2_mex(u, tau.*l);  
+  
+  %[u, dykstra_iter] = shrink_osc_mex(u, tau.*l);  
+  [u] = shrink_osc2_mex(u, tau.*l);
   
   % overrelaxation
   xi = (1-rho)*xi_old + rho*xi;
   u = (1-rho)*u_old + rho*u;
 
   if mod(iter, check) == 0
+    
     div = max(max(abs(A*u-b)));
        
     v = max(u,[],2) - min(u,[],2);
+    v_max = max(v(:));
+    v_min = min(v(:));
+    
     f = v'*l;
     
-    fprintf('iter = %04d, length = %f, ||div||_infty = %f, dykstra_iter = %f\n', ...
-    iter, f, div, dykstra_iter);
+    fprintf('iter = %04d, length = %f, ||div||_infty = %f, v_min = %f, v_max = %f\n\n', ...
+    iter, f, div, v_min, v_max);
     
-    sfigure(1); hold on;
-    tree = find(v > 0.01);
+    sfigure(1);
+    plot(X,Y, '.b', 'Markersize', 1); hold on;
+    for i=1:q
+      plot(p(targets(i), 1), p(targets(i),2), 'ro', 'Markersize', 5, ...
+      'Linewidth', 2);
+    end
+    tree = find(v > 0.25);
     for i=1:length(tree)
-      c = 1-max(0, min(1, v(tree(i))));
+      c = max(0, min(1, 1-v(tree(i))));
       plot(p(e(tree(i),:),1), p(e(tree(i),:),2), 'Color',...
         ones(1,3)*c, 'Linewidth', 1);
     end
-    plot(X,Y, '.b', 'Markersize', 1);
-    for i=1:q
-      plot(p(targets(i), 1), p(targets(i),2), 'ro', 'Markersize', 5, 'Linewidth', 2);
-    end    
-    
     hold off;
     
     xlim([-1, 1]);
